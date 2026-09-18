@@ -1,0 +1,146 @@
+{
+  "name": "Daily Operations Report",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {}
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "id": "ab74236c-4eab-4e29-be50-10bd7900a7d2",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "mode": "list",
+          "cachedResultName": "Serviced Accommodation Guest Operations Automation",
+          "cachedResultUrl": "YOUR_GOOGLE_SHEET_URL"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Reservations",
+          "cachedResultUrl": "YOUR_GOOGLE_SHEET_URL"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        208,
+        0
+      ],
+      "id": "d0ee6d67-84f4-40d9-bcb5-63037c0c90f7",
+      "name": "Reservations"
+    },
+    {
+      "parameters": {
+        "jsCode": "const now = new Date();\n\nconst today = now.toISOString().split('T')[0];\n\nconst arrivals = [];\nconst departures = [];\n\nfor (const item of items) {\n  const data = item.json;\n\n  if (data[\"Reservation Status\"] !== \"Confirmed\") {\n    continue;\n  }\n\n  if (data[\"Check-in Date\"] === today) {\n    arrivals.push({\n      reservationId: data[\"Reservation ID\"],\n      guest: `${data[\"Guest First Name\"]} ${data[\"Guest Last Name\"]}`,\n      property: data[\"Property\"],\n      checkIn: data[\"Check-in Date\"],\n      checkOut: data[\"Check-out Date\"]\n    });\n  }\n\n  if (data[\"Check-out Date\"] === today) {\n    departures.push({\n      reservationId: data[\"Reservation ID\"],\n      guest: `${data[\"Guest First Name\"]} ${data[\"Guest Last Name\"]}`,\n      property: data[\"Property\"],\n      checkIn: data[\"Check-in Date\"],\n      checkOut: data[\"Check-out Date\"]\n    });\n  }\n}\n\nreturn [\n  {\n    json: {\n      reportDate: today,\n      arrivalCount: arrivals.length,\n      departureCount: departures.length,\n      arrivals,\n      departures\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        416,
+        0
+      ],
+      "id": "d0a5e184-ad8a-40d0-b4c4-63c16f393a13",
+      "name": "Evaluate Today's Operations"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\n\nconst arrivalRows = data.arrivals.length\n  ? data.arrivals.map(guest => `\n      <tr>\n        <td>${guest.reservationId}</td>\n        <td>${guest.guest}</td>\n        <td>${guest.property}</td>\n        <td>${guest.checkOut}</td>\n      </tr>\n    `).join(\"\")\n  : `<tr><td colspan=\"4\">No arrivals today</td></tr>`;\n\nconst departureRows = data.departures.length\n  ? data.departures.map(guest => `\n      <tr>\n        <td>${guest.reservationId}</td>\n        <td>${guest.guest}</td>\n        <td>${guest.property}</td>\n        <td>${guest.checkIn}</td>\n      </tr>\n    `).join(\"\")\n  : `<tr><td colspan=\"4\">No departures today</td></tr>`;\n\nconst html = `\n<html>\n<body>\n  <h2>Daily Operations Report</h2>\n\n  <p><strong>Date:</strong> ${data.reportDate}</p>\n\n  <h3>Today's Arrivals (${data.arrivalCount})</h3>\n\n  <table border=\"1\" cellpadding=\"8\" cellspacing=\"0\">\n    <tr>\n      <th>Reservation</th>\n      <th>Guest</th>\n      <th>Property</th>\n      <th>Check-out</th>\n    </tr>\n    ${arrivalRows}\n  </table>\n\n  <h3>Today's Departures (${data.departureCount})</h3>\n\n  <table border=\"1\" cellpadding=\"8\" cellspacing=\"0\">\n    <tr>\n      <th>Reservation</th>\n      <th>Guest</th>\n      <th>Property</th>\n      <th>Check-in</th>\n    </tr>\n    ${departureRows}\n  </table>\n\n  <p>\n    <strong>Total arrivals:</strong> ${data.arrivalCount}<br>\n    <strong>Total departures:</strong> ${data.departureCount}\n  </p>\n\n  <p>This report was generated automatically by the guest operations workflow.</p>\n</body>\n</html>\n`;\n\nreturn [{\n  json: {\n    reportDate: data.reportDate,\n    arrivalCount: data.arrivalCount,\n    departureCount: data.departureCount,\n    subject: `Daily Operations Report - ${data.reportDate}`,\n    html\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        624,
+        0
+      ],
+      "id": "9ab9a72c-20a4-4e32-94b2-23bd780acec3",
+      "name": "Generate Operations Report"
+    },
+    {
+      "parameters": {
+        "sendTo": "YOUR_OPERATIONS_EMAIL",
+        "subject": "={{ $json.subject }}",
+        "message": "={{ $json.html }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        832,
+        0
+      ],
+      "id": "986b068b-7016-481b-a56e-a0f7b021a2fa",
+      "name": "Send a message"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Reservations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reservations": {
+      "main": [
+        [
+          {
+            "node": "Evaluate Today's Operations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluate Today's Operations": {
+      "main": [
+        [
+          {
+            "node": "Generate Operations Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Operations Report": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "nodeGroups": [],
+  "tags": []
+}
